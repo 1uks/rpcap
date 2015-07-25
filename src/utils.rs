@@ -99,3 +99,20 @@ pub fn get_inverse_endianess() -> Endianess {
 pub fn get_inverse_endianess() -> Endianess {
     Endianess::Little
 }
+
+pub enum BitPosition {
+    First, Second, Third, Fourth, Fifth, Sixth, Seventh, Eighth
+}
+
+pub fn is_bit_set(byte: u8, pos: BitPosition) -> bool {
+    match pos {
+        BitPosition::First   => byte & 0b1 == 0b1,
+        BitPosition::Second  => byte & 0b10 == 0b10,
+        BitPosition::Third   => byte & 0b100 == 0b100,
+        BitPosition::Fourth  => byte & 0b1000 == 0b1000,
+        BitPosition::Fifth   => byte & 0b10000 == 0b10000,
+        BitPosition::Sixth   => byte & 0b100000 == 0b100000,
+        BitPosition::Seventh => byte & 0b1000000 == 0b1000000,
+        BitPosition::Eighth  => byte & 0b10000000 == 0b10000000,
+    }
+}
