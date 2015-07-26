@@ -1,8 +1,9 @@
 extern crate byteorder;
 
-use self::byteorder::ByteOrder;
 use std::fmt;
+use std::convert;
 use std::net::Ipv4Addr;
+use self::byteorder::ByteOrder;
 use utils::*;
 
 trait Checksum {
@@ -26,16 +27,16 @@ impl fmt::Debug for MacAddress {
 
 // FIXME add more types (https://en.wikipedia.org/wiki/EtherType)
 #[derive(Debug)]
-pub enum EtherType  {
+pub enum EtherType {
     IPv4,
     ARP,
     IPv6,
     Unknown(u16),
 }
 
-impl EtherType {
-    fn from_u16(value: u16) -> EtherType {
-        match value {
+impl convert::Into<EtherType> for u16 {
+    fn into(self) -> EtherType {
+        match self {
             0x0800 => EtherType::IPv4,
             0x0806 => EtherType::ARP,
             0x86dd => EtherType::IPv6,
@@ -58,10 +59,9 @@ impl<'a> EthernetFrame<'a> {
         if buf.len() < Self::min_size() {
             return None
         }
-        let len = buf.len();
         let src = MacAddress::new(buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
         let dst = MacAddress::new(buf[6], buf[7], buf[8], buf[9], buf[10], buf[11]);
-        let ethertype = EtherType::from_u16(byteorder::BigEndian::read_u16(&buf[12..14]));
+        let ethertype = byteorder::BigEndian::read_u16(&buf[12..14]).into();
         let payload = &buf[14..];
 
         Some(EthernetFrame {
@@ -86,12 +86,27 @@ pub enum IpProtocol {
     Unknown(u8),
 }
 
-impl IpProtocol {
-    fn from_u8(value: u8) -> IpProtocol {
-        match value {
+impl convert::Into<IpProtocol> for u8 {
+    fn into(self) -> IpProtocol {
+        match self {
             0x06 => IpProtocol::Tcp,
             0x11 => IpProtocol::Udp,
             value => IpProtocol::Unknown(value),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct IpFlags {
+    pub dont_fragment: bool,
+    pub more_fragments: bool,
+}
+
+impl convert::Into<IpFlags> for u8 {
+    fn into(self) -> IpFlags {
+        IpFlags {
+            dont_fragment: is_bit_set(self, BitPosition::Second),
+            more_fragments: is_bit_set(self, BitPosition::First),
         }
     }
 }
@@ -103,7 +118,7 @@ pub struct Ipv4Packet<'a> {
     pub tos: u8,
     pub length: u16,
     pub id: u16,
-    pub flags: u8,
+    pub flags: IpFlags,
     pub offset: u16,
     pub ttl: u8,
     pub proto: IpProtocol,
@@ -126,10 +141,10 @@ impl<'a> Ipv4Packet<'a> {
         let tos = buf[1];
         let length = byteorder::BigEndian::read_u16(&buf[2..4]);
         let id = byteorder::BigEndian::read_u16(&buf[4..6]);
-        let flags = buf[6] >> 5; // FIXME enum
+        let flags = (buf[6] >> 5).into();
         let offset = byteorder::BigEndian::read_u16(&[buf[6] & 0b00011111, buf[7]]);
         let ttl = buf[8];
-        let proto = IpProtocol::from_u8(buf[9]);
+        let proto = buf[9].into();
         let checksum = byteorder::BigEndian::read_u16(&buf[10..12]);
         let src = Ipv4Addr::new(buf[12], buf[13], buf[14], buf[15]);
         let dst = Ipv4Addr::new(buf[16], buf[17], buf[18], buf[19]);
@@ -244,9 +259,9 @@ impl<'a> TcpSegment<'a> {
             None
         };
 
-        //if data_offset as usize * 4  > buf.len() {
-            //return None;
-        //}
+        if data_offset as usize * 4 > buf.len() {
+            return None;
+        }
 
         let options = if data_offset > 5 {
             Some(&buf[20..data_offset as usize * 4])
