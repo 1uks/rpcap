@@ -148,11 +148,18 @@ impl<'a> Ipv4Packet<'a> {
         let checksum = byteorder::BigEndian::read_u16(&buf[10..12]);
         let src = Ipv4Addr::new(buf[12], buf[13], buf[14], buf[15]);
         let dst = Ipv4Addr::new(buf[16], buf[17], buf[18], buf[19]);
-        let num_options = ihl * 4 - 20;
 
-        if num_options > 0 {
-            return None; // FIXME implement
+        let data_offset = ihl as usize * 4;
+
+        if data_offset > buf.len() {
+            return None;
         }
+
+        let options = if data_offset > 20 {
+            Some(&buf[20..data_offset])
+        } else {
+            None
+        };
 
         Some(Ipv4Packet {
             version: version,
@@ -167,8 +174,8 @@ impl<'a> Ipv4Packet<'a> {
             checksum: checksum,
             src: src,
             dst: dst,
-            options: None,
-            payload: &buf[20..],
+            options: options,
+            payload: &buf[data_offset..],
             raw: &buf,
         })
     }
